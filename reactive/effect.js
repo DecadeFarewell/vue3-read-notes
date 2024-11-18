@@ -45,11 +45,11 @@ function track(target, key) {
     depsMap.set(key, (deps = new Set()));
   }
 
-  // 最后将激活的副作用函数添加到桶里
+  // 最后将当前的副作用函数添加到对应的Set中
   deps.add(activeEffect);
 }
 
-// 在set拦截函数内调用trigger函数处罚变化
+// 在set拦截函数内调用trigger函数触发变化
 function trigger(target, key) {
   //根据target从桶中取出depsMap，它是 key --> effects
   const depsMap = bucket.get(target);
@@ -85,3 +85,5 @@ setTimeout(() => {
 // =================== effect-end
 
 // TODO: page-49
+
+
