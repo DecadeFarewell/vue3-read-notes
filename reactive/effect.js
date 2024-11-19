@@ -4,7 +4,7 @@
 const bucket = new WeakMap();
 
 // 原始数据
-const data = { text: "hello word" };
+const data = { ok: true, text: "hello word" };
 
 //对原始数据的代理
 const obj = new Proxy(data, {
@@ -47,6 +47,8 @@ function track(target, key) {
 
   // 最后将当前的副作用函数添加到对应的Set中
   deps.add(activeEffect);
+
+  activeEffect.deps.push(deps)
 }
 
 // 在set拦截函数内调用trigger函数触发变化
@@ -58,8 +60,11 @@ function trigger(target, key) {
   // 根据key取得所有副作用函数 effects
   const effects = depsMap.get(key);
 
+  // 使用额外的set解决无限循环问题♻️
+  const effectsToRun = new Set(effects);
   // 执行副作用函数
-  effects && effects.forEach((fn) => fn());
+  // effects && effects.forEach((fn) => fn());
+  effectsToRun.forEach((effect) => effect());
 }
 
 // =================== proxy-end
@@ -70,18 +75,42 @@ function trigger(target, key) {
 let activeEffect;
 // effect用于注册副作用函数
 const effect = (fn) => {
-  activeEffect = fn;
-  fn();
+  const effectFn = () => {
+    activeEffect = effectFn
+
+    cleanup(effectFn)
+
+    fn()
+  }
+  // 用于存储所有与该副作用函数相关的依赖
+  effectFn.deps = []
+
+  effectFn()
 };
+
+const cleanup = (effectFn) => {
+  for(let i = 0; i < effectFn.deps.length; i++){
+    // deps依赖集合，track中的Set集合
+    const deps = effectFn.deps[i]
+    // 将effectFn从deps依赖集合中移除
+    // note: 这里虽然会将effectFn先移除，但是在移除之后执行effectFn时，会重新读取依赖，建立新的联系
+    deps.delete(effectFn)
+  }
+  effectFn.deps.length = 0
+}
 
 effect(() => {
   console.log("effct run ");
-  document.body.innerText = obj.text;
+  document.body.innerText = obj.ok ? obj.text : 'not';
 });
 
 setTimeout(() => {
-  obj.text = "hello vue3";
+  obj.ok = false;
 }, 1000);
+
+setTimeout(() => {
+  obj.text = 'hello vue3'
+}, 2000);
 // =================== effect-end
 
 // TODO: page-49
