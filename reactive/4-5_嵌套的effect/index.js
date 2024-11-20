@@ -4,7 +4,7 @@
 const bucket = new WeakMap();
 
 // 原始数据
-const data = { ok: true, text: "hello word" };
+const data = { foo: true, bar: true };
 
 //对原始数据的代理
 const obj = new Proxy(data, {
@@ -73,14 +73,29 @@ function trigger(target, key) {
 
 // 用一个全局变量存储被注册的副作用函数
 let activeEffect;
+
+// 新增一个effect栈
+const effectStack = []
 // effect用于注册副作用函数
 const effect = (fn) => {
   const effectFn = () => {
+    // 将副作用函数从依赖合集中清除
+    cleanup(effectFn)
+    
+    // 记录当前正在执行的effect
     activeEffect = effectFn
 
-    cleanup(effectFn)
+    // 将当前副作用函数压入栈中
+    effectStack.push(effectFn)
 
+    // 执行副作用函数
     fn()
+    
+    // 执行完毕后，将当前副作用函数弹出栈，并还原activeEffect的值（即还原为外层的副作用函数）
+    effectStack.pop()
+
+    // 还原外层副作用函数
+    activeEffect = effectStack[effectStack.length - 1]
   }
   // 用于存储所有与该副作用函数相关的依赖
   effectFn.deps = []
@@ -98,19 +113,26 @@ const cleanup = (effectFn) => {
   }
   effectFn.deps.length = 0
 }
+// =================== effect-end
 
-effect(() => {
-  console.log("effct run ");
-  document.body.innerText = obj.ok ? obj.text : 'not';
+
+// ===== test-start
+let temp1, temp2
+
+effect(function effectFn1() {
+  console.log("effectFn1 run ");
+
+  effect(function effectFn2(){
+    console.log("effectFn2 run ");
+    // 在effectFn2中读取obj.bar
+    temp2 = obj.bar
+  })
+
+  temp1 = obj.foo
 });
 
 setTimeout(() => {
-  obj.ok = false;
+  obj.foo = false
 }, 1000);
-
-setTimeout(() => {
-  obj.text = 'hello vue3'
-}, 2000);
-// =================== effect-end
 
 
