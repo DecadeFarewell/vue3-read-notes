@@ -38,8 +38,8 @@ const createReactive = (data, isShallow = false, isReadonly = false) => {
         return target;
       }
 
-      // 非只读时，才需要建立响应联系（依赖收集）
-      if (!isReadonly) {
+      // 非只读时，才需要建立响应联系（依赖收集） && key 为 symbol类型时不建立响应联系(遍历数组时会访问Symbol.iterator)
+      if (!isReadonly && typeof key !== 'symbol') {
         // 将激活的副作用函数activeEffect添加到桶里
         track(target, key);
       }
@@ -69,7 +69,9 @@ const createReactive = (data, isShallow = false, isReadonly = false) => {
     // 拦截 for...in... 操作
     ownKeys(target) {
       // 这里是将副作用函数与ITERATE_KEY关联，而非某一个单独的属性
-      track(target, ITERATE_KEY);
+      // 如果是目标对象是数组，则应该与length属性进行关联
+      track(target, Array.isArray(target) ? "length" : ITERATE_KEY);
+      // track(target, ITERATE_KEY);
 
       return Reflect.ownKeys(target);
     },
@@ -210,15 +212,16 @@ function trigger(target, key, type, newValue) {
   if (Array.isArray(target) && key === "length") {
     // 对于索引大于等于新length值的元素
     // 需要将相关联的副作用函数添加到effectsToRun中待执行
-      depsMap.forEach((effects, key) => {
-        if (key >= newValue) {
-          effects.forEach((effect) => {
-            if (effect !== activeEffect) {
-              effectsToRun.add(effect);
-            }
-          });
-        }
-      });
+    depsMap.forEach((effects, key) => {
+      console.log('key: ', key);
+      if (key >= newValue) {
+        effects.forEach((effect) => {
+          if (effect !== activeEffect) {
+            effectsToRun.add(effect);
+          }
+        });
+      }
+    });
   }
 
   // 执行副作用函数
@@ -317,8 +320,41 @@ function flushJob() {
 // ===== flushJob end
 
 // note: test start =====
-const arr = reactive(["foo"]);
+// const arr = reactive(["foo", "bar"]);
 
+// effect(() => {
+//   for (const key in arr) {
+//     console.log("arr-key: ", key);
+//   }
+// });
+
+// const arr = [1, 2, 3, 4, 5];
+
+// arr[Symbol.iterator] = function() {
+//   const target = this
+//   const length = target.length
+//   const index = 0
+
+//   return {
+//     next() {
+//       return {
+//         value: index < length ? target[index] : undefined,
+//         done: index++ >= length
+//       }
+//     }
+//   }
+// }
+
+const arr = reactive([1, 2, 3, 4, 5]); 
+
+/**
+ * 支持for..of...循环，需要部署迭代器方法，数组的迭代器方法内部会访问数组的索引和length，
+ * 由于7-1小节对于索引和length已做了处理，因此这里不需要额外处理就能建立响应式联系，
+ * 但是由于for..of...会访问数组的Symbol.iterator属性，它是一个symbol值，
+ * 为了避免错误，应该屏蔽访问该属性时建立响应式联系的操作
+ */
 effect(() => {
-  console.log("arr[0]: ", arr[0]);
+  for (const key of arr) {
+    console.log("arr-key: ", key);
+  }
 });
