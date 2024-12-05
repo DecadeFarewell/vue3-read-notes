@@ -12,8 +12,21 @@ const TriggerType = {
   DEL: "DEL",
 };
 
+// 定义map，存储 原始对象 与 代理对象的映射
+const reactiveMap = new Map();
+
 const reactive = (data) => {
-  return createReactive(data);
+  // 通过原始对象查找代理对象，如果存在直接返回
+  const existionProxy = reactiveMap.get(data);
+  if (existionProxy) return existionProxy;
+
+  // 否则，创建新的代理对象
+  const proxy = createReactive(data);
+
+  // 保存新的代理对象，防止后续重复创建
+  reactiveMap.set(data, proxy);
+
+  return proxy;
 };
 
 const reactiveShallow = (data) => {
@@ -28,6 +41,25 @@ const readOnlyShallow = (data) => {
   return createReactive(data, true /**isShallow */, true);
 };
 
+const arrayInstrumentation = {};
+
+["includes", "indexOf", "lastIndexOf"].forEach((method) => {
+  const originMethod = Array.prototype[method];
+
+  arrayInstrumentation[method] = function (...args) {
+    // 当前 method 使用 Reflect 改变了this，此时this指向代理对象
+    // 先在代理对象中查找
+    let res = originMethod.apply(this, args);
+
+    if (!res) {
+      // 若找不到，去原对象中找
+      res = originMethod.apply(this.raw, args);
+    }
+
+    return res;
+  };
+});
+
 const createReactive = (data, isShallow = false, isReadonly = false) => {
   //对原始数据的代理
   const obj = new Proxy(data, {
@@ -38,8 +70,14 @@ const createReactive = (data, isShallow = false, isReadonly = false) => {
         return target;
       }
 
+      // 如果是目标对象是数组，且访问的数组方法存在于arrayInstrumentation中
+      // 则返回定义在arrayInstrumentation上的值，以代理对象作为this
+      if (Array.isArray(target) && arrayInstrumentation.hasOwnProperty(key)) {
+        return Reflect.get(arrayInstrumentation, key, receiver);
+      }
+
       // 非只读时，才需要建立响应联系（依赖收集） && key 为 symbol类型时不建立响应联系(遍历数组时会访问Symbol.iterator)
-      if (!isReadonly && typeof key !== 'symbol') {
+      if (!isReadonly && typeof key !== "symbol") {
         // 将激活的副作用函数activeEffect添加到桶里
         track(target, key);
       }
@@ -213,7 +251,7 @@ function trigger(target, key, type, newValue) {
     // 对于索引大于等于新length值的元素
     // 需要将相关联的副作用函数添加到effectsToRun中待执行
     depsMap.forEach((effects, key) => {
-      console.log('key: ', key);
+      console.log("key: ", key);
       if (key >= newValue) {
         effects.forEach((effect) => {
           if (effect !== activeEffect) {
@@ -320,41 +358,10 @@ function flushJob() {
 // ===== flushJob end
 
 // note: test start =====
-// const arr = reactive(["foo", "bar"]);
 
-// effect(() => {
-//   for (const key in arr) {
-//     console.log("arr-key: ", key);
-//   }
-// });
+const obj = {};
 
-// const arr = [1, 2, 3, 4, 5];
+const arr = reactive([obj]);
 
-// arr[Symbol.iterator] = function() {
-//   const target = this
-//   const length = target.length
-//   const index = 0
-
-//   return {
-//     next() {
-//       return {
-//         value: index < length ? target[index] : undefined,
-//         done: index++ >= length
-//       }
-//     }
-//   }
-// }
-
-const arr = reactive([1, 2, 3, 4, 5]); 
-
-/**
- * 支持for..of...循环，需要部署迭代器方法，数组的迭代器方法内部会访问数组的索引和length，
- * 由于7-1小节对于索引和length已做了处理，因此这里不需要额外处理就能建立响应式联系，
- * 但是由于for..of...会访问数组的Symbol.iterator属性，它是一个symbol值，
- * 为了避免错误，应该屏蔽访问该属性时建立响应式联系的操作
- */
-effect(() => {
-  for (const key of arr) {
-    console.log("arr-key: ", key);
-  }
-});
+console.log(arr.includes(arr[0]));
+console.log(arr.includes(obj));
