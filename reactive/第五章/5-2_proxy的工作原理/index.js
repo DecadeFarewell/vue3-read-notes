@@ -21,6 +21,7 @@ const obj = new Proxy(data, {
     // return target[key];
 
     // 使用Reflect.get来获取属性值， receiver为proxy代理对象，也就是obj， 用于改变this指像
+    // 对象的访问器属性的this指向问题
     return Reflect.get(target, key, receiver);
   },
   // 拦截设置操作
