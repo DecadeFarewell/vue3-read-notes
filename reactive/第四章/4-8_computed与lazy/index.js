@@ -207,6 +207,7 @@ function computed(getter) {
         dirty = false;
       }
 
+      // 处理嵌套的场景，访问computed时，手动收集依赖
       track(obj, "value");
 
       return value;
