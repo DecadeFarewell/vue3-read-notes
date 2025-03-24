@@ -3,6 +3,7 @@ const { ref, effect } = VueReactivity;
 function createRenderer(options) {
   // 通过 options 得到操作DOM的API
   const { createElement, insert, setElementText } = options;
+
   function mountELement(vnode, container) {
     // 调用 createElement 创建dom元素
     const el = createElement(vnode.type);
@@ -11,9 +12,13 @@ function createRenderer(options) {
     if (typeof vnode.children === "string") {
       // 调用 setElementText 设置元素的文本节点
       setElementText(el, vnode.children);
+    } else if (Array.isArray(vnode.children)) {
+      vnode.children.forEach((child) => {
+        patch(null, child, el);
+      });
     }
     // 调用insert, 将元素添加到容器中
-    insert(el, container)
+    insert(el, container);
   }
 
   function patch(n1, n2, container) {
@@ -59,9 +64,14 @@ const renderer = createRenderer({
 });
 
 const vnode = {
-  type: 'div',
-  children: "kwok's render"
-}
+  type: "div",
+  children: [
+    {
+      type: "p",
+      children: "kwok's render",
+    },
+  ],
+};
 
 effect(() => {
   renderer.render(vnode, document.getElementById("app"));

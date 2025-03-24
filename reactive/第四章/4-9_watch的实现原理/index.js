@@ -184,7 +184,7 @@ function watch(source, cb) {
   const effectFn = effect(() => getter(), {
     lazy: true,
     scheduler(fn) {
-      // 执行到这里时，trigger函数已经执行effectFn将会拿到最新的getter函数的返回的值
+      // 当scheduler是执行时，一定是依赖也就是监听的source发生了变化，因此重新执行一次effectFn可以得到最新值
       newValue = effectFn();
 
       // 执行cb时，oldValue在外层执行手动调用副作用函数时已经被赋值了
